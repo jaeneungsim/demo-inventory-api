@@ -15,6 +15,7 @@ ITEM_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 MAX_NAME_LENGTH = 100
 MAX_PRICE = 1_000_000
 NEW_ITEM_FIELDS = {"id", "name", "price"}
+PAGE_SIZE = 20
 
 PATHS = (
     ("/health", re.compile(r"^/health$")),
@@ -93,7 +94,27 @@ def list_items(event):
             break
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
     items.sort(key=sort_key)
-    return 200, {"items": [public_item(item) for item in items]}
+    cursor = (event.get("queryStringParameters") or {}).get("cursor")
+    start = 0
+    if cursor:
+        after = decode_cursor(cursor)
+        start = next((i + 1 for i, item in enumerate(items) if item["id"] == after), len(items))
+    page = items[start : start + PAGE_SIZE]
+    body = {"items": [public_item(item) for item in page]}
+    if start + PAGE_SIZE < len(items):
+        body["next"] = encode_cursor(page[-1]["id"])
+    return 200, body
+
+
+def encode_cursor(item_id):
+    return base64.urlsafe_b64encode(item_id.encode()).decode()
+
+
+def decode_cursor(cursor):
+    try:
+        return base64.urlsafe_b64decode(cursor.encode()).decode()
+    except ValueError:
+        raise BadRequest("invalid_cursor", "cursor is not valid") from None
 
 
 def get_item(event, id):
