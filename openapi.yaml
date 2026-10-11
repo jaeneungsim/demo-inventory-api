@@ -119,7 +119,7 @@ components:
           type: boolean
     Item:
       type: object
-      required: [id, name, price]
+      required: [id, name, price, stock]
       properties:
         id:
           type: string
@@ -128,6 +128,10 @@ components:
         price:
           type: number
           minimum: 0
+        stock:
+          type: integer
+          minimum: 0
+          description: Units in stock.
     NewItem:
       type: object
       required: [id, name, price]
