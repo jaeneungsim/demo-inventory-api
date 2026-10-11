@@ -128,6 +128,9 @@ components:
         price:
           type: number
           minimum: 0
+        sold_out:
+          type: boolean
+          description: True when the item has no stock left.
     NewItem:
       type: object
       required: [id, name, price]

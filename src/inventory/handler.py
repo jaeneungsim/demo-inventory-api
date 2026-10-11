@@ -163,7 +163,12 @@ def validate_new_item(data):
 
 
 def public_item(item):
-    return {"id": item["id"], "name": item["name"], "price": float(item["price"])}
+    return {
+        "id": item["id"],
+        "name": item["name"],
+        "price": float(item["price"]),
+        "sold_out": int(item.get("stock", 0)) < 0,
+    }
 
 
 def sort_key(item):

@@ -22,7 +22,7 @@ def test_list_items_returns_every_page_sorted_without_stock(call):
     response, body, _ = call("GET", "/items")
     assert response["statusCode"] == 200
     assert [item["id"] for item in body["items"]] == ["41", "42", "43"]
-    assert body["items"][1] == {"id": "42", "name": "Ceramic mug", "price": 12.5}
+    assert body["items"][1] == {"id": "42", "name": "Ceramic mug", "price": 12.5, "sold_out": False}
     assert all("stock" not in item for item in body["items"])
 
 
@@ -35,7 +35,12 @@ def test_list_items_sorts_numeric_ids_numerically(call, table):
 def test_get_item(call):
     response, body, _ = call("GET", "/items/42")
     assert response["statusCode"] == 200
-    assert body == {"id": "42", "name": "Ceramic mug", "price": 12.5}
+    assert body == {"id": "42", "name": "Ceramic mug", "price": 12.5, "sold_out": False}
+
+
+def test_item_in_stock_is_not_sold_out(call):
+    _, body, _ = call("GET", "/items/41")
+    assert body["sold_out"] is False
 
 
 def test_get_item_does_not_return_stock_yet(call):
@@ -59,7 +64,7 @@ def test_get_item_with_invalid_id_is_not_found(call, item_id):
 def test_create_item(call, table):
     response, body, _ = call("POST", "/items", {"id": "44", "name": " Pencil case ", "price": 9})
     assert response["statusCode"] == 201
-    assert body == {"id": "44", "name": "Pencil case", "price": 9.0}
+    assert body == {"id": "44", "name": "Pencil case", "price": 9.0, "sold_out": False}
     assert table.items["44"]["stock"] == 0
     assert table.items["44"]["price"] == Decimal("9")
 

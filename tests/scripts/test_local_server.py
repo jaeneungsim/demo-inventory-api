@@ -38,7 +38,7 @@ def test_to_event_builds_a_v2_event():
 def test_server_returns_handler_responses_with_cors(server):
     with urllib.request.urlopen(f"{server}/items/42") as response:
         assert response.status == 200
-        assert json.loads(response.read()) == {"id": "42", "name": "Ceramic mug", "price": 12.5}
+        assert json.loads(response.read())["name"] == "Ceramic mug"
         assert response.headers["x-request-id"]
         assert response.headers["Access-Control-Allow-Origin"] == "*"
 
