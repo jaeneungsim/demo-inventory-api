@@ -1,0 +1,54 @@
+name: deploy-dev
+
+# Deploys inv-api-dev after every merge into dev. pr-triage then runs the read-only
+# post-merge check against it.
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy-dev:
+    name: deploy-dev
+    if: vars.DEV_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: npm ci
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.DEV_ROLE_ARN }}
+          role-session-name: deploy-dev-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+
+      - name: Deploy dev
+        working-directory: infra
+        env:
+          CFN_EXEC_ROLE_ARN: ${{ vars.CFN_EXEC_ROLE_ARN }}
+          CDK_DISABLE_CLI_TELEMETRY: "true"
+        run: >-
+          npx cdk deploy --require-approval never --no-notices
+          --role-arn "$CFN_EXEC_ROLE_ARN" -c stage=dev

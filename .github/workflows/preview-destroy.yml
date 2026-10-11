@@ -1,0 +1,65 @@
+name: preview-destroy
+
+# Removes inv-api-preview-<ticket> when the PR closes. Runs the base commit's code, not the PR's.
+# Another open PR for the same ticket in this repo loses its preview too; its next push redeploys it.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-api-${{ github.head_ref }}
+  cancel-in-progress: false
+
+jobs:
+  preview-destroy:
+    name: preview-destroy
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && vars.PREVIEW_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Find the preview stage
+        id: stage
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 scripts/stage_name.py >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: npm ci
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.PREVIEW_ROLE_ARN }}
+          role-session-name: preview-api-pr-${{ github.event.pull_request.number }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+
+      - name: Destroy the ticket stack
+        working-directory: infra
+        env:
+          STAGE: ${{ steps.stage.outputs.stage }}
+          CFN_EXEC_ROLE_ARN: ${{ vars.CFN_EXEC_ROLE_ARN }}
+          CDK_DISABLE_CLI_TELEMETRY: "true"
+        run: >-
+          npx cdk destroy --force --no-notices
+          --role-arn "$CFN_EXEC_ROLE_ARN" -c "stage=$STAGE"

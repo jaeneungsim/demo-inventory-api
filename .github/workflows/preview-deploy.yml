@@ -1,0 +1,78 @@
+name: preview-deploy
+
+# Deploys inv-api-preview-<ticket> for PRs from this repo (never for forks) at level v3.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-api-${{ github.head_ref }}
+  cancel-in-progress: false
+
+jobs:
+  preview-deploy:
+    name: preview-deploy
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && (vars.TRIAGE_LEVEL || 'v3') == 'v3'
+      && vars.PREVIEW_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Find the preview stage
+        id: stage
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 scripts/stage_name.py >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: npm ci
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.PREVIEW_ROLE_ARN }}
+          role-session-name: preview-api-pr-${{ github.event.pull_request.number }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+
+      - name: Deploy the ticket stack
+        working-directory: infra
+        env:
+          STAGE: ${{ steps.stage.outputs.stage }}
+          CFN_EXEC_ROLE_ARN: ${{ vars.CFN_EXEC_ROLE_ARN }}
+          CDK_DISABLE_CLI_TELEMETRY: "true"
+        run: >-
+          npx cdk deploy --require-approval never --no-notices
+          --role-arn "$CFN_EXEC_ROLE_ARN" -c "stage=$STAGE"
+          --outputs-file ../cdk-outputs.json
+
+      - name: Write preview.json
+        env:
+          STAGE: ${{ steps.stage.outputs.stage }}
+        run: python3 scripts/preview_info.py --outputs cdk-outputs.json --stage "$STAGE" > preview.json
+
+      - name: Upload preview.json
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: preview
+          path: preview.json
+          if-no-files-found: error
+          retention-days: 14

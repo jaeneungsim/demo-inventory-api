@@ -1,0 +1,19 @@
+#!/bin/sh
+# Rejects commit messages that do not name a ticket key such as INV-123.
+# Enable with scripts/setup-hooks.sh.
+
+message_file="$1"
+first_line=$(head -n 1 "$message_file")
+
+case "$first_line" in
+  "Merge "* | "Revert "* | "fixup! "* | "squash! "* | "amend! "*)
+    exit 0
+    ;;
+esac
+
+if grep -v '^#' "$message_file" | grep -Eq '(^|[^A-Za-z0-9_])INV-[0-9]+'; then
+  exit 0
+fi
+
+echo "commit-msg: name the ticket in the message, for example \"INV-123: add stock to the item response\"." >&2
+exit 1

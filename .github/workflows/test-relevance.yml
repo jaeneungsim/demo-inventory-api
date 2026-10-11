@@ -1,0 +1,63 @@
+name: test-relevance
+
+# Runs the PR's changed tests on the base code and on the PR (see docs in scripts/test_relevance.py).
+# The check script comes from the base commit, so a PR cannot change the check that judges it.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-relevance-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test-relevance:
+    name: test-relevance
+    if: (vars.TRIAGE_LEVEL || 'v3') != 'v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the check scripts from the base commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install Python tools
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run the changed tests on the base code and on the PR
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          python .trusted/scripts/test_relevance.py
+          --base "$BASE_SHA" --head "$HEAD_SHA" --output test-relevance.json
+
+      - name: Upload the result
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-relevance
+          path: test-relevance.json
+          if-no-files-found: warn
+          retention-days: 14

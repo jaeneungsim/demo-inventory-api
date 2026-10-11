@@ -1,0 +1,99 @@
+name: behavior
+
+# Runs the PR's API with DynamoDB Local and checks the expected behavior from the PR description.
+# The server wrapper, seed data and checker come from the base commit; the API code is the PR's.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: behavior-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  behavior:
+    name: behavior
+    if: (vars.TRIAGE_LEVEL || 'v3') != 'v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:3.3.1@sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab
+        ports:
+          - 8000:8000
+    env:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_REGION: ap-southeast-2
+      AWS_DEFAULT_REGION: ap-southeast-2
+      DYNAMODB_ENDPOINT: http://localhost:8000
+      TABLE_NAME: inventory-items-local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out the check scripts from the base commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted
+          sparse-checkout: |
+            scripts
+            seed
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install Python tools
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Load the seed data
+        run: python .trusted/scripts/seed.py
+
+      - name: Start the API
+        run: |
+          nohup python .trusted/scripts/local_server.py --src src --port 8080 > server.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "The API did not start." >&2
+          cat server.log >&2
+          exit 1
+
+      - name: Run the expected behavior
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_URL: http://127.0.0.1:8080
+        run: >-
+          python .trusted/scripts/run_behavior.py
+          --log-file server.log --output behavior-results.json
+
+      - name: Upload the result
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: behavior-results
+          path: behavior-results.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload the server log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: behavior-server-log
+          path: server.log
+          if-no-files-found: ignore
+          retention-days: 7

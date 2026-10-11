@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Local runs and CI outputs
+server.log
+behavior-results.json
+test-relevance.json
+preview.json
+cdk-outputs.json
+.trusted/
+
+# OS
+.DS_Store
