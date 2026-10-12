@@ -167,6 +167,7 @@ def public_item(item):
         "id": item["id"],
         "name": item["name"],
         "price": float(item["price"]),
+        "stock": int(item.get("stock", 0)),
         "sold_out": int(item.get("stock", 0)) < 0,
     }
 
