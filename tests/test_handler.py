@@ -199,3 +199,13 @@ def test_get_table_uses_the_local_endpoint(monkeypatch):
         "endpoint_url": "http://localhost:8000",
         "name": "items-local",
     }
+
+
+def test_list_items_returns_twenty_and_a_cursor(call, table):
+    for number in range(100, 125):
+        table.put_item(
+            Item={"id": str(number), "name": f"Item {number}", "price": Decimal("1"), "stock": 1}
+        )
+    _, first, _ = call("GET", "/items")
+    assert len(first["items"]) == 20
+    assert first["next"]
