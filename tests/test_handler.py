@@ -45,7 +45,12 @@ def test_get_item(call):
 
 def test_item_in_stock_is_not_sold_out(call):
     _, body, _ = call("GET", "/items/41")
-    assert body["sold_out"] is False
+    assert body.get("sold_out") is False
+
+
+def test_item_without_stock_is_sold_out(call):
+    _, body, _ = call("GET", "/items/43")
+    assert body.get("sold_out") is True
 
 
 def test_get_item_returns_zero_stock(call):
@@ -69,7 +74,7 @@ def test_get_item_with_invalid_id_is_not_found(call, item_id):
 def test_create_item(call, table):
     response, body, _ = call("POST", "/items", {"id": "44", "name": " Pencil case ", "price": 9})
     assert response["statusCode"] == 201
-    assert body == {"id": "44", "name": "Pencil case", "price": 9.0, "stock": 0, "sold_out": False}
+    assert body == {"id": "44", "name": "Pencil case", "price": 9.0, "stock": 0, "sold_out": True}
     assert table.items["44"]["stock"] == 0
     assert table.items["44"]["price"] == Decimal("9")
 
