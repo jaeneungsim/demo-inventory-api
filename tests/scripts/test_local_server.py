@@ -43,6 +43,7 @@ def test_server_returns_handler_responses_with_cors(server):
             "name": "Ceramic mug",
             "price": 12.5,
             "stock": 5,
+            "sold_out": False,
         }
         assert response.headers["x-request-id"]
         assert response.headers["Access-Control-Allow-Origin"] == "*"
@@ -86,7 +87,7 @@ def test_expected_behavior_against_the_base_api(server, capsys):
   request: GET /items/43
   expect:
     status: 200
-    body_has: [sold_out]
+    body_has: [discount]
 ```"""
     seen = []
 
@@ -103,5 +104,5 @@ def test_expected_behavior_against_the_base_api(server, capsys):
     assert outcome["B1"][0] is True
     assert outcome["B2"][0] is True, outcome["B2"]
     assert outcome["B3"][0] is True, outcome["B3"]
-    assert outcome["B4"] == (False, "body has no `sold_out`")
+    assert outcome["B4"] == (False, "body has no `discount`")
     assert rb.build_report(results)["passed"] is False

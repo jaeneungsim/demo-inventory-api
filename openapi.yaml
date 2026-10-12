@@ -132,6 +132,9 @@ components:
           type: integer
           minimum: 0
           description: Units in stock.
+        sold_out:
+          type: boolean
+          description: True when the item has no stock left.
     NewItem:
       type: object
       required: [id, name, price]

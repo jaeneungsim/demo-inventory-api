@@ -163,11 +163,13 @@ def validate_new_item(data):
 
 
 def public_item(item):
+    stock = int(item.get("stock", 0))
     return {
         "id": item["id"],
         "name": item["name"],
         "price": float(item["price"]),
-        "stock": int(item.get("stock", 0)),
+        "stock": stock,
+        "sold_out": stock <= 0,
     }
 
 
